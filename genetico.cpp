@@ -23,6 +23,7 @@ using namespace std;
 #define ios ios::sync_with_stdio(0)
 #define N 1500
 
+double Demanda[N][N] , Distancia[N][N];
 int zonasPeriferia[ N ];
 int NzonasPeriferia;
 int M[N][N];
@@ -32,6 +33,7 @@ bool isCentrality[ N ];
 double probalityChoosePeriferia , probGetcentrality;
 double LongitudMaxima;
 double CROSS , MUT;
+double CAP;
 vi adj[N];
 vector<double> cost[N];
 
@@ -92,7 +94,6 @@ void CreaRutas( vector< nodo > C ){
         }
         R.pb( S );
     }
-    
 }
 
 int makeBit(){
@@ -101,23 +102,64 @@ int makeBit(){
     return 0;
 }
 
-double fitness(Individuo X){
+double fitness(vector< pair< vi , int > > &List,Individuo X){
+    vector< vi > R;
+    for(int i = 0 ; i < Nrutas ; i++)
+        if( X.genotipo[i] ) R.pb( List[i].fi );
     
+    int numberofroutes = R.size();
+    vector<int> MM[N][N];
+    for(int t = 0 ; t < R.size() ; t++){
+        vi &route = R[t];
+        for(int i = 0 ; i < route.size() ; i++){
+            int d = 0;
+            for(int j = i + 1 ; j < route.size() ; j++){
+                int u = route[i] , v = route[j];
+                d += Distancia[u][v];
+                MM[u][v].pb( d );
+                MM[v][u].pb( d );
+            }
+        }
+    }
+    
+    for(int i = 0 ; i < N ; i++)
+        for(int j = 0 ; j < N ; j++)
+            sort( all(MM[i][j]) );
+    
+    double C1 = 0 , C2 = 0 , Tdemanda = 0;
+    for(int i = 0 ; i < N ; i++){
+        for(int j = 0 ; j < N ; j++)if( i != j and Demanda[i][j] > 0 ){
+            C2 += Demanda[i][j];
+            Tdemanda += Demanda[i][j];
+            int r = MM[i][j].size();
+            double have = 0;
+            for(int k = 0 ; k < MM[i][j].size() ; j++){
+                if( have >= Demanda[i][j] ) break;
+                C1 += min( CAP , Demanda[i][j] - have ) * MM[i][j][k];
+                have += CAP;
+            }
+            have = min( have , Demanda[i][j] );
+            C2 -= have;
+        }
+    }
+    if(  )
+    double W1 , W2 , W3;
+    return W1 * C1 + W2 * C2 + W3 * numberofroutes;
 }
 
-Individuo makeIndividuo(){
+Individuo makeIndividuo(vector< pair< vi , int > > &List,int x){
     Individuo X;
     for(int i = 0 ; i < Nrutas ; i++)
-        X.genotipo[i] = makeBit();
+        if( List[i].se == x ) X.genotipo[i] |= 1;
     
-    X.aptitud = fitness( X );
+    X.aptitud = fitness( List , X );
     return X;
 }
 
-vector<Individuo> makePoblation(int n){
-    vector<Individuo> poblation( n );
-    for(int i = 0 ; i < n ; i++)
-        poblation[i] = makeIndividuo();
+vector<Individuo> makePoblation(vector< pair< vi , int > > &List,int Poblation){
+    vector<Individuo> poblation( Poblation );
+    for(int i = 0 ; i < Poblation ; i++)
+        poblation[i] = makeIndividuo( List , i );
     return poblation;
 }
 
@@ -142,7 +184,7 @@ vector<Individuo> SelectionTournoments(vector<Individuo> P){
     return NP;
 }
 
-vector<Individuo> crossSelection(vector<Individuo> P){
+vector<Individuo> crossSelection(vector< pair< vi , int > > &List ,vector<Individuo> P){
     int n = P.size();
     for(int i = 0 ; i + 1 < n ; i += 2){
         if( (double) rand()/(RAND_MAX+1.0) < CROSS ){
@@ -156,29 +198,31 @@ vector<Individuo> crossSelection(vector<Individuo> P){
                     if( (double) rand() / ( RAND_MAX + 1.0 ) < MUT )
                         P[k].genotipo[j] ^= 1;
                 
-                P[k].aptitud = fitness( P[k] );
+                P[k].aptitud = fitness( List , P[k] );
             }
         }
     }
     return P;
 }
 
-Individuo AG(){
-    int poblation;
-    vector<Individuo> P = makePoblation( poblation );
+Individuo AG( vector< pair< vi , int > > &List , int poblation ){
+    random_shuffle( all(List) );
+    vector<Individuo> P = makePoblation( List , poblation );
     int generations;
     for(int i = 0 ; i < generations ; i++){
         P = SelectionTournoments( P );
-        P = crossSelection( P );
+        P = crossSelection( List , P );
     }
     return getBest( P );
 }
 
 int main(){
     srand(time(NULL));
-    int Nrutas;
-    vector<nodo> C;
-    CreaRutas( C );
-    AG();
+    //vector<nodo> C;
+    //CreaRutas( C );
+    vector< pair< vi , int > > List;
+    Nrutas = List.size();
+    int poblation;
+    AG( List , poblation );
     return 0;
 }

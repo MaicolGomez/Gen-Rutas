@@ -1,7 +1,7 @@
 #include<bits/stdc++.h>
 using namespace std;
 #define pi (2.0*acos(0.0))
-#define eps 1e-6
+#define eps 1e-5
 #define ll long long
 #define inf (1LL<<50)
 #define vi vector<int>
@@ -22,9 +22,9 @@ using namespace std;
 #define MOD 1000000007
 #define ios ios::sync_with_stdio(0)
 #define N 500
-#define CAP 3.0
-#define LMin 5.5
-#define LMax 25
+
+#define LMin 0
+#define LMax (1LL<<60)
 
 struct nodo{
     int u;
@@ -37,7 +37,8 @@ bool operator<(nodo A,nodo B){ return A.d > B.d; }
 
 double Demanda[N][N] , Distancia[N][N];
 vi adj[N];
-vi cost[N];
+vector<double> cost[N];
+double CAP;
 
 vi dijkstra(int source,int target,int n,vector<bool> vis){
     priority_queue< nodo > Q;
@@ -54,6 +55,7 @@ vi dijkstra(int source,int target,int n,vector<bool> vis){
         vis[u] = 1;
         for(int i = adj[u].size() - 1 ; i >= 0 ; i--){
             int v = adj[u][i];
+            if( vis[v] ) continue;
             if( d[v] > d[u] + cost[u][i] ){
                 d[v] = d[u] + cost[u][i];
                 fa[v] = u;
@@ -62,9 +64,9 @@ vi dijkstra(int source,int target,int n,vector<bool> vis){
         }
     }
     vi route;
+    if( d[target] > inf - 1 ) return route;
     int x = target;
     while( x != -1 ){
-        //vis[x] = 1;
         route.pb( x );
         x = fa[x];
     }
@@ -90,11 +92,13 @@ vi insert(int i,vi &r,int u,int n,vector<bool> vis){
     vi auxRoute;
     if( i == 0 ){
         auxRoute = dijkstra( u , r[i] , n , vis );
+        if( auxRoute.size() == 0 ) return auxRoute;
         for(int j = 1 ; j < r.size() ; j++)
             auxRoute.pb( r[j] );
     }
     else if( i == r.size() ){
         auxRoute = dijkstra( r[i-1] , u , n , vis );
+        if( auxRoute.size() == 0 ) return auxRoute;
         vi x = r;
         for(int j = 1 ; j < auxRoute.size() ; j++)
             x.pb( auxRoute[j] );
@@ -105,16 +109,17 @@ vi insert(int i,vi &r,int u,int n,vector<bool> vis){
         vis[ r[i] ] = 1;
         auxRoute = dijkstra( r[i-1] , u , n , vis );
         
+        if( auxRoute.size() == 0 ) return auxRoute;
+        
         for(int j = 0 ; j < auxRoute.size() - 1 ; j++)
             vis[ auxRoute[j] ] = 1;
         
         vis[ r[i] ] = 0;
         vi aux2 = dijkstra( u , r[i] , n , vis );
+        if( aux2.size() == 0 ) return aux2;
         
         for(int j = 0 ; j < aux2.size() - 1 ; j++)
             vis[ aux2[j] ] = 0;
-        
-        if( auxRoute.size() == 0 or aux2.size() == 0 ) return auxRoute;
         
         for(int j = 1 ; j < aux2.size() ; j++)
             auxRoute.pb( aux2[j] );
@@ -185,65 +190,60 @@ pair< vi , double> Candidate(int u,int v,vector<vi> &R,int n,int &id){
     if( R.size() == 0 ) return mp( vi (1,0) , inf );
     vi newRoute;
     double Cost = inf;
-    //cout << u << " <--> " << v << endl;
     for(int i = 0 ; i < R.size() ; i++){
         bool Uroute = inRoute( R[i] , u ) , Vroute = inRoute( R[i] , v );
         if( Uroute and Vroute ) continue;
-        if( Uroute )
+        if( Uroute ){
             if( solve( R[i] , n , v , newRoute , Cost ) ) id = i;
+        }
         else if( Vroute ){
             if( solve( R[i] , n , u , newRoute , Cost ) ) id = i;
         }
         else if( solve2( R[i] , u , v , n , newRoute , Cost ) ) id = i;
     }
-    /*for(int i = 0 ; i < newRoute.size() ; i++)
-        cout << newRoute[i] << " - ";
-    cout << endl;*/
     return mp( newRoute , Cost );
 }
 
-void update(vi &route ,int u, map<pii , double > &D){
-    for(int i = 0 ; i < route.size() ; i++) if( route[i] != u )
-        if( D[ mp( min( route[i] , u ) , max( route[i] , u ) ) ] != 0 ){
-            D[ mp( min( route[i] , u ) , max( route[i] , u ) ) ] += CAP;
-            D[ mp( min( route[i] , u ) , max( route[i] , u ) ) ] = min( 0.0 , D[ mp( min( route[i] , u ) , max( route[i] , u ) ) ] );
-        }
+void update(vi &route ,int u,double &Ds){
+    for(int i = 0 ; i < route.size() ; i++) if( route[i] != u ){
+        int v = route[i];
+        double r = min( CAP , Demanda[u][v] );
+        Demanda[u][v] -= r;
+        Ds += r;
+    }
 }
 
-vector<vi> PIA(int n,double proportionecesary){
+inline bool compare(pair< double , pii > A , pair< double , pii > B){
+    if( abs( A.fi - B.fi ) > eps ) return A.fi > B.fi;
+    if( A.se.fi != B.se.fi ) return A.se.fi < B.se.fi;
+    return A.se.se < B.se.se;
+}
+
+vector<vi> PIA(int n,double proportionnecesary){
     vector< vi > R;
-    map< pii , double > D;
-    map< pii , double > :: iterator it;
+    vector< pii > need;
     double Ds = 0 , Dt = 0;
     for(int i = 0 ; i < n ; i++)
-        for(int j = i + 1 ; j < n ; j++)if( i != j ){
-            if( (Demanda[i][j] + Demanda[j][i]) < eps ) continue;
-            D[ mp(i,j) ] = -(Demanda[i][j] + Demanda[j][i]);
-            Dt += Demanda[i][j] + Demanda[j][i];
+        for(int j = 0 ; j < n ; j++)if( i != j ){
+            if( Demanda[i][j] < eps ) continue;
+            Dt += Demanda[i][j];
+            if( i < j ) need.pb( mp( i , j ) );
         }
-    
-    //for(it = D.begin() ; it != D.end() ; it++)
-    //    cout << (*it).fi.fi << " " << (*it).fi.se << " " << (*it).se << endl;
-    
-    while( Ds < proportionecesary * Dt ){
-        //for(it = D.begin() ; it != D.end() ; it++)
-            //cout << (*it).fi.fi << " " << (*it).fi.se << " " << (*it).se << endl;
+    double DLast = 0;
+    while( Ds < proportionnecesary * Dt ){  
         vector< pair< double , pii > > V;
-        for(it = D.begin() ; it != D.end() ; it++)if( abs( (*it).se ) > eps )
-            V.pb( mp( (*it).se , mp( (*it).fi.fi , (*it).fi.se ) ) );
-            
-        sort( all(V) );
+        for(int i = 0 ; i < need.size() ; i++){
+            int a = need[i].fi , b = need[i].se;
+            if( a < b and Demanda[a][b] + Demanda[b][a] > eps ) V.pb( mp( (Demanda[a][b] + Demanda[b][a]) , mp( a , b ) ) );
+        }
+        
+        sort( all(V) , compare );
         int sz = V.size() / 3;
-        int r = (random() % sz); //demand in range [0 , D.size()/3>
-        while( r >= 0 and V[r].fi > -eps ) r--;
-        //cout << r << endl;
-        if( r == -1 ) break;
-        pii q = (V[r].se);
+        int r = (sz>0)?(random() % sz):0; //demand in range [0 , D.size()/3> DEBUG
+        pii q = V[ r ].se;
         vi newRoute = dijkstra( q.fi , q.se , n , vector<bool> (n , 0) );
+        
         double cost = getCost( newRoute );
-        /*for(int i = 0 ; i < newRoute.size() ; i++)
-            cout << newRoute[i] << " ";
-        cout << endl;*/
         double costinsert = inf;
         int id = -1;
         pair< vi , double > G = Candidate( q.fi , q.se , R , n , id );
@@ -252,53 +252,63 @@ vector<vi> PIA(int n,double proportionecesary){
         if( id == -1 or G.se < LMin or G.se > LMax or cost < G.se - lastCost ){
             if( cost < LMin or LMax < cost ) continue;
             R.pb( newRoute );
+            /*for(int i  = 0 ; i < newRoute.size() ; i++)
+                cout << newRoute[i] << " ";
+            cout << endl;*/
             for(int i  = 0 ; i < newRoute.size() ; i++)
-                update( newRoute , newRoute[i] , D );
+                update( newRoute , newRoute[i] , Ds );
         }
         else{
             if( G.se < LMin or G.se > LMax ) continue;
-            if( inRoute( R[id] , q.fi ) ) update( G.fi , q.se , D );
-            else if( inRoute( R[id] , q.se ) ) update( G.fi , q.fi , D );
-            else update( G.fi , q.se , D ) , update( G.fi , q.fi , D );
+            int it1 = 0 , it2 = 0;
+            while( it2 < G.fi.size() ){
+                if( it1 < R[id].size() )
+                    if( R[id][it1++] == G.fi[it2] ){
+                        it2++;
+                        continue;
+                    }
+                update( G.fi , G.fi[it2] , Ds );
+                it2++;
+            }
             R[id] = G.fi;
         }
-        Ds = 0;
-        for(int i = 0 ; i < n ; i++)
-            for(int j = i + 1 ; j < n ; j++)
-                Ds += Demanda[i][j] + Demanda[j][i] + 2 * D[ mp(i,j) ];
-        //cout << Dt << " " << Ds << endl;
+        printf("%d: %lf %lf\n", (int)R.size() , Dt , Ds );
+        if( Ds - DLast < eps ) break;
+        DLast = Ds;
     }
     return R;
 }
 
 int main(){
     srand( time(NULL) );
-    int n , m , a , b , c;
-    scanf("%d%d",&n,&m);
+    int Buses = 40 , capacity = 80 , token;
+    CAP = (Buses * capacity)/10;
+    int n , m , a , b;
+    double c;
+    token = scanf("%d%d",&n,&m);
     for(int i = 0 ; i < m ; i++){
-        scanf("%d%d%d",&a,&b,&c);
+        token = scanf("%d%d%lf",&a,&b,&c);
         adj[a].pb( b ); cost[a].pb( c );
         adj[b].pb( a ); cost[b].pb( c );
         Distancia[a][b] = Distancia[b][a] = c;
     }
-    while( scanf("%d%d%d",&a,&b,&c) == 3 ){
-        a--,b--;
-        Demanda[min(a,b)][max(a,b)] = c;
+    int tt;
+    token = sc(tt);
+    while( tt-- ){
+        token = scanf("%d%d%lf",&a,&b,&c);
+        Demanda[a][b] = c;
     }
-    vi r;
-    r.pb( 1 ); r.pb( 3 ); r.pb( 4 ); r.pb( 5 );
-    vector<bool> vis(n , 0);
-    vis[1] = vis[3] = vis[4] = 1;
-    r = insert( r.size() , r , 6 , n , vis);
-    for(int i = 0 ; i < r.size() ; i++)
-        cout << r[i] << " ";
-    cout << endl;
-    vector< vi > R = PIA( n , 0.8 );
-    for(int i = 0 ; i < R.size() ; i++){
-        cout << "Route #" << i + 1 << ":\n";
-        for(int j = 0 ; j < R[i].size() ; j++)
-            cout << R[i][j] << " ";
-        cout << "\n";
+    int Poblation;
+    token = sc(Poblation);
+    //vector< pair< vi , int > > List;
+    for(int i = 0 ; i < Poblation ; i++){
+        vector< vi > R = PIA(n , 0.8);
+        cout << i + 1 << ":\n";
+        for(int j = 0 ; j < R.size() ; j++){
+            for(int k = 0 ; k < R[j].size() ; k++)
+                printf("%d ",R[j][k]);
+            printf("\n");
+        }
     }
     return 0;
 }
